@@ -235,7 +235,7 @@ const make = Effect.gen(function* () {
                 OPENBLAS_NUM_THREADS: String(session.cpus.length),
                 MKL_NUM_THREADS: String(session.cpus.length),
                 T3CODE_AGENTBOX_SESSION: session.id,
-                T3CODE_ENVIRONMENT_LABEL: `${hostname}:${path.basename(session.project)}`,
+                T3CODE_ENVIRONMENT_LABEL: `${hostname}:${path.basename(session.project)} · ${session.cpus.length} CPU · GPU ${gpus.indexOf(session.gpu)} shared×${session.gpuSharedWith.length + 1}`,
               },
               extendEnv: false,
               detached: true,
