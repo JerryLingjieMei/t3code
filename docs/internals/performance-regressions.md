@@ -117,7 +117,9 @@ reach the API. Only the server process is measured.
 - Every window also reads event-loop delay (p50, p99 and max past the 10 ms sampling interval)
   and GC count and pause time from inside the server, over the inspector. Delay is the user-felt
   cost: a stalled loop holds every client's RPC, however low the CPU average is. The delay
-  histogram's own timer wakes the loop once per sample, so `wakeupsPerSec` leaves those out.
+  histogram's own timer can wake the loop once per sample. That happens on an idle loop but
+  not on a busy one, so no fixed amount can be subtracted: `wakeupsPerSec` includes them, and
+  `loopSamples` shows how many samples there were.
 
 Run it on macOS and Windows too, and on Linux with `--no-agent-scope`. Only Linux has agent
 scopes, so other platforms take per-process paths a Linux server with a systemd user manager never
