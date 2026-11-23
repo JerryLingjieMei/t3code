@@ -51,7 +51,8 @@ it.live("boots an Agentbox plan through the real CLI's project-bootstrap route",
       ChildProcess.make(
         process.execPath,
         [
-          NodeURL.fileURLToPath(new URL("../../../scripts/agentbox.ts", import.meta.url)),
+          NodeURL.fileURLToPath(new URL("./bin.ts", import.meta.url)),
+          "agentbox",
           "plan",
           "--layout",
           layout,

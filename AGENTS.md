@@ -190,7 +190,7 @@ Architecture and its constraints: `docs/internals/overview.md`. Glossary: `docs/
 - `packages/contracts` - Effect/Schema contracts plus small derived helpers. No heavy runtime logic.
 - `packages/shared` - shared runtime utils, subpath exports, no barrel.
 - `packages/client-runtime` - client code shared by web and mobile.
-- `scripts/agentbox.ts` - this fork's per-project environment resource plan and launcher, using the existing host layout. Each project owns a persistent T3 home, port, CPU affinity set and shared GPU assignment. `apps/server/src/process/agentScope.ts` preserves this placement rather than creating user-manager scopes outside Slurm or the managed environment.
+- `apps/server/src/process/Agentbox.ts` - this fork's per-project environment resource plan and launcher, using the existing host layout. `t3 agentbox plan|run|serve` is its CLI transport. Each project owns a persistent T3 home, port, CPU affinity set and shared GPU assignment. `apps/server/src/process/agentScope.ts` preserves this placement rather than creating user-manager scopes outside Slurm or the managed environment.
 - `.repos/` - vendored read-only references. Prefer their patterns over invented ones. Never edit or import from them. Sync with `vpr sync:repos` when bumping the matching dependency. If it is missing (sparse checkout), read a file with `git show origin/main:.repos/<path>`.
 
 ## Taste
