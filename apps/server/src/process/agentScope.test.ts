@@ -68,11 +68,13 @@ const withFakeSystemd = <A, E>(
     stopFails = false,
     leftovers = false,
     liveOwner = false,
+    slurmJobId,
   }: {
     readonly oomPolicy?: boolean;
     readonly stopFails?: boolean;
     readonly leftovers?: boolean;
     readonly liveOwner?: boolean;
+    readonly slurmJobId?: string;
   } = {},
 ) =>
   Effect.gen(function* () {
@@ -130,7 +132,11 @@ const withFakeSystemd = <A, E>(
       Effect.provideService(ProviderProcesses.ProviderProcesses, { hasOtherLiveOwner: liveOwner }),
       Effect.provideService(ProcessRunner.ProcessRunner, runner),
       Effect.provideService(HostProcess.Platform, "linux"),
-      Effect.provideService(HostProcess.Environment, { PATH: bin, XDG_RUNTIME_DIR: "/run/user/1" }),
+      Effect.provideService(HostProcess.Environment, {
+        PATH: bin,
+        XDG_RUNTIME_DIR: "/run/user/1",
+        ...(slurmJobId === undefined ? {} : { SLURM_JOB_ID: slurmJobId }),
+      }),
       Effect.provideService(FileSystem.FileSystem, {
         ...fileSystem,
         readFileString: (path, encoding) =>
@@ -202,6 +208,20 @@ const launchCodex = (
   );
 
 describe("AgentScope service", () => {
+  it.effect("keeps Slurm agents and terminals in their allocation instead of a user scope", () =>
+    withFakeSystemd(
+      ({ scope, calls }) =>
+        Effect.gen(function* () {
+          for (const name of ["agent", "terminal"]) {
+            const launch = yield* scope.wrap({ command: "agent", args: [], name });
+            expect(launch.args.some((arg) => arg.includes("systemd-run"))).toBe(false);
+          }
+          expect(calls).toEqual([]);
+        }),
+      { slurmJobId: "12345" },
+    ),
+  );
+
   it.effect("labels a thread from its newest scope until its next session clears it", () =>
     withFakeSystemd(({ scope, units }) =>
       Effect.gen(function* () {

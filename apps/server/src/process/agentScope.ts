@@ -101,11 +101,14 @@ const MAX_TRACKED_THREADS = 500;
 export const make = Effect.gen(function* () {
   const platform = yield* HostProcess.Platform;
   if (platform !== "linux") return AgentScope.defaultValue();
+  const hostEnvironment = yield* HostProcess.Environment;
+  if (hostEnvironment.SLURM_JOB_ID || hostEnvironment.T3CODE_AGENTBOX_SESSION) {
+    return AgentScope.defaultValue();
+  }
 
   const runner = yield* ProcessRunner.ProcessRunner;
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const hostEnvironment = yield* HostProcess.Environment;
   const { stateDir } = yield* ServerConfig.ServerConfig;
   const { hasOtherLiveOwner } = yield* ProviderProcesses.ProviderProcesses;
   const ownedSlice = ownedAgentSlice(stateDir);
