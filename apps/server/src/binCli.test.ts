@@ -3,11 +3,18 @@ import * as NodeHttp from "node:http";
 import * as NodeURL from "node:url";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
+import * as NetService from "@t3tools/shared/Net";
 import { assert, it } from "@effect/vitest";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Stream from "effect/Stream";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import { Command } from "effect/cli";
+import { makeCli } from "./binCli.ts";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import * as SqlClient from "effect/sql/SqlClient";
 
@@ -16,6 +23,84 @@ import {
   makePersistedServerRuntimeState,
   persistServerRuntimeState,
 } from "./serverRuntimeState.ts";
+
+const decodeAgentboxPlan = Schema.decodeEffect(
+  Schema.fromJsonString(
+    Schema.Struct({
+      sessions: Schema.Array(
+        Schema.Struct({
+          serverArgs: Schema.Array(Schema.String),
+          stateDir: Schema.String,
+          project: Schema.String,
+        }),
+      ),
+    }),
+  ),
+);
+
+it.live("boots an Agentbox plan through the real CLI's project-bootstrap route", () =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-agentbox-cli-" });
+    const project = `${root}/project`;
+    const layout = `${root}/layout.tsv`;
+    yield* fs.makeDirectory(project);
+    yield* fs.writeFileString(layout, `${project}\n`);
+    const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+    const child = yield* spawner.spawn(
+      ChildProcess.make(
+        process.execPath,
+        [
+          NodeURL.fileURLToPath(new URL("../../../scripts/agentbox.ts", import.meta.url)),
+          "plan",
+          "--layout",
+          layout,
+          "--cpu-list",
+          "0-1",
+          "--gpu-list",
+          "GPU-fixture",
+          "--state-root",
+          `${root}/t3-home`,
+        ],
+        { env: { SLURM_JOB_ID: "" } },
+      ),
+    );
+    const { stdout, stderr, exitCode } = yield* Effect.all(
+      {
+        stdout: child.stdout.pipe(Stream.decodeText(), Stream.mkString),
+        stderr: child.stderr.pipe(Stream.decodeText(), Stream.mkString),
+        exitCode: child.exitCode,
+      },
+      { concurrency: "unbounded" },
+    );
+    assert.strictEqual(Number(exitCode), 0, stderr);
+    const session = (yield* decodeAgentboxPlan(stdout)).sessions[0];
+    assert(session !== undefined);
+    let handled = false;
+    const cli = makeCli({ cloudEnabled: false }).pipe(
+      Command.withHandler((flags) =>
+        Effect.sync(() => {
+          handled = true;
+          assert(
+            "autoBootstrapProjectFromCwd" in flags &&
+              "noBrowser" in flags &&
+              "baseDir" in flags &&
+              "cwd" in flags,
+          );
+          assert.deepStrictEqual(flags.autoBootstrapProjectFromCwd, Option.some(true));
+          assert.deepStrictEqual(flags.noBrowser, Option.some(true));
+          assert.deepStrictEqual(flags.baseDir, Option.some(session.stateDir));
+          assert.deepStrictEqual(flags.cwd, Option.some(session.project));
+        }),
+      ),
+    );
+    yield* Command.runWith(cli, { version: "0.0.0" })(session.serverArgs);
+    assert.strictEqual(handled, true);
+  }).pipe(
+    Effect.scoped,
+    Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer, NetService.layer)),
+  ),
+);
 
 it.live("keeps migration warnings out of JSON thread output", () =>
   Effect.gen(function* () {

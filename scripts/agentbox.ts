@@ -58,13 +58,25 @@ export function planAgentbox(input: {
       Math.floor(cpus.length / projects.length) + (index < cpus.length % projects.length ? 1 : 0);
     const assigned = cpus.slice(offset, offset + count);
     offset += count;
+    const stateDir = `${input.stateRoot.replace(/\/$/, "")}/${id}`;
     return {
       id,
       project,
       cpus: assigned,
       gpu: gpus[index % gpus.length]!,
       port,
-      stateDir: `${input.stateRoot.replace(/\/$/, "")}/${id}`,
+      stateDir,
+      serverArgs: [
+        "--no-browser",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        String(port),
+        "--base-dir",
+        stateDir,
+        "--auto-bootstrap-project-from-cwd",
+        project,
+      ],
     };
   });
   return plan.map((session) => ({
@@ -193,21 +205,7 @@ if (import.meta.main) {
           yield* fs.chmod(log, 0o600);
           const child = yield* ChildProcess.make(
             "taskset",
-            [
-              "--cpu-list",
-              session.cpus.join(","),
-              executablePath,
-              bin,
-              "serve",
-              "--host",
-              "127.0.0.1",
-              "--port",
-              String(session.port),
-              "--base-dir",
-              session.stateDir,
-              "--auto-bootstrap-project-from-cwd",
-              session.project,
-            ],
+            ["--cpu-list", session.cpus.join(","), executablePath, bin, ...session.serverArgs],
             {
               cwd: session.project,
               stdin: "ignore",
@@ -248,7 +246,7 @@ if (import.meta.main) {
         path.join(stateRoot, "manifest.json"),
       );
       yield* Console.log(
-        `Started ${children.length} project environments; resource manifest: ${path.join(stateRoot, "manifest.json")}`,
+        `Spawned ${children.length} project environments; resource manifest: ${path.join(stateRoot, "manifest.json")}`,
       );
       return yield* Effect.raceAll(
         children.map(({ session, child }) =>
